@@ -1,0 +1,49 @@
+{
+    "all_data": {
+        "drop_99": true
+    },
+    "diag_cir": {
+        "replacement_dict": {
+            "*B580_DXCOIN_P2": {"2": 0},
+            "*B480_DXMISDX_P2": {"2": 0},
+            "*B270_TKBITE_P2": {"2": 0},
+            "*B291_TKTX_P2": {"2": 0}
+        },
+        "binning": {
+            "B280_TKATTACH_P2": 5,
+            "B300_TKTXDUR_P2": 5,
+            "B461_DXTM_P2": 3
+        }
+    },
+    "addl_cir": {
+        "replacement_dict": {
+            "*R200_SEX_P2": {"2": 0},
+            "*U3040_EMPSTAT_P2":{"5": 0, "2": 1,"3": 1, "4": 1, "6": 1}
+        },
+        "binning": {
+            "U3011_TXGROC_P2": 3,
+            "*U3191_BEDDAY_P2": 15,
+            "U3170_MENTHLTH_P2": 15,
+            "U3180_PHYSHLTH_P2": 15,
+            "B250_DXTIMESINF_P2": 2,
+            "*U1001_CTX_P2": 2
+        }
+    },
+    "symptoms": {
+        "drop_skipped_8": true
+    },
+    "categorical": {
+        "drop_99": true,
+        "cols": {
+            "B570_1_DXHCP_P2": {
+                "general practitioner": 1,
+                "internist": 2,
+                "infectious disease specialist": 3,
+                "rheumatologist": 4,
+                "lyme specialist": 5,
+                "pediatrician": 6,
+                "other doctor": 7
+            }
+        }
+    }
+}

@@ -9,6 +9,9 @@ This repository contains non-sensitive code developed for the UCLA 2024 CAM REU 
   - **Non-NNLS (Needell) SSNMF**  
 - **Histogram Generation**: Code for visualizing results.  
 
+## Authors
+- PI: Prof. Deanna Needell, UCLA
+- Alexandria Tan, UW '26
 ## Notes  
 - This repository does **not** include data or data processing code.  
 - The focus is on algorithmic implementations and visualization tools.  

@@ -12,6 +12,7 @@ This repository contains non-sensitive code developed for the UCLA 2024 CAM REU 
 ## Authors
 - PI: Prof. Deanna Needell, UCLA
 - Alexandria Tan, UW '26
+- Campbell Schelp, UCSD '26
 ## Notes  
 - This repository does **not** include data or data processing code.  
 - The focus is on algorithmic implementations and visualization tools.  

@@ -72,13 +72,13 @@ class Haddock_SSNMF(SSNMF_Application):
         
         Returns:
         S (np.array): coefficient matrix, topics x features
-        tol (float, optional): NNLS tolerance, default 1e-6
+        tol (float, optional): NNLS tolerance, default 1e-10
         '''
         if X.shape[0] != A.shape[0]:
             raise Exception('Shape mismatch, X: ',X.shape,' A: ',A.shape)
         
         W = kwargs.get('W', None)
-        tol = kwargs.get('tol',1e-6)
+        tol = kwargs.get('tol',1e-10)
         
         num_samples, num_features = X.shape
         num_components = A.shape[1]
@@ -87,27 +87,18 @@ class Haddock_SSNMF(SSNMF_Application):
         ### Decrease precision to avoid NNLS Non-convergence? Or reduce # of iterations
         
         for i in range(num_features):
+            s_i = None
             if W is None:
-                # try:
-                #     s_i, _ = nnls(A, X[:, i])
-                # except RuntimeError as e:
-                #     print('Matrix A')
-                #     print(A)
-                #     print('X[:,i]')
-                #     print(X[:,i])
-                #     print(f'{e} Trying 10000 iterations')
-                #     s_i, _ = nnls(A, X[:, i], maxiter=10000)
-                nnls_result = lsq_linear(A, X[:,i], bound=(0,np.inf), tol=tol)
+                nnls_result = lsq_linear(A, X[:,i], bounds=(0,np.inf), tol=tol)
                 s_i = nnls_result.x
 
-                
             else:
                 W_i = W[:,i]
                 W_i_matrix = np.diag(W_i)
                 X_i = X[:,i]
                 
-                # s_i, _ = nnls(W_i_matrix@A, W_i_matrix@X_i)
-                nnls_result = lsq_linear(W_i_matrix@A, W_i_matrix@X_i, bound=(0, np.inf), tol=tol)
+                nnls_result = lsq_linear(W_i_matrix@A, W_i_matrix@X_i, bounds=(0, np.inf), tol=tol)
+                s_i = nnls_result.x
             S[:, i] = s_i
             
         return S

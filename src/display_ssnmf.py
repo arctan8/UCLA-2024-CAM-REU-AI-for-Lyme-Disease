@@ -1,7 +1,7 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def display_ssnmf(model, feature_name, feature_labels, class_labels, **kwargs):
+def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwargs):
     '''
     Display K = AB^T, A, and B heatmaps.
     
@@ -11,6 +11,7 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, **kwargs):
     feature_labels (list): list of feature names
     class_labels (list): list of class names
     k (int, optional): number of topics
+    groupcounts (dict, optional): group count dictionary
     
     figsize_A (tuple, optional): size of matrix A
     figsize_B (tuple, optional): size of matrix B
@@ -27,24 +28,36 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, **kwargs):
         except AttributeError:
             raise ValueError('This SSNMF version does not have an instance variable k, please specify k in kwargs.')
         
-    display_heatmap(A, 'A', (1.5, 5), k, feature_name, feature_labels)
+    display_heatmap(A, 'A', (1.5, 5), k, feature_name, feature_labels, defn,**kwargs)
     
-    display_heatmap(B, 'B', (4, 1), k, 'Labels', class_labels)
+    display_heatmap(B, 'B', (4, 1), k, f'Labels_{feature_name}', class_labels, defn, **kwargs)
     
     K = B @ A.T
-    display_heatmap(K.T, 'K', (1, 8),len(K), feature_name, feature_labels, xlabel='Labels')
+    display_heatmap(K.T, 'K', (1, 8),len(K), feature_name, feature_labels, defn, xlabel='Labels', **kwargs)
     
     
-def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, **kwargs):
-    plt.figure(figsize=figsize)
+def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, defn, **kwargs):
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     sns.heatmap(matrix, xticklabels=range(1,num_topics+1), yticklabels=feature_labels)
     
     xlabel = kwargs.get('xlabel','Topics')
     
-    plt.xlabel(xlabel)
-    plt.ylabel(feature_name)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(feature_name)
     
-    plt.title('Matrix '+ matrix_name + ': '+feature_name+' x Topics')
+    title = f"{defn}: Matrix {matrix_name}: {feature_name} x Topics"
+    
+    ax.set_title(title)
+
+    groupcounts = kwargs.get('groupcounts', None)
+
+    if groupcounts is not None:
+        count_text = "\n".join([f"{k}: {v}" for k, v in groupcounts.items()])
+        ax.text(1.05, 1, count_text, transform=ax.transAxes,
+                fontsize=10, verticalalignment='top',
+                bbox=dict(boxstyle="round", facecolor="white", edgecolor="gray"))
+    
+    fig.savefig(f"{title}.png",bbox_inches='tight')
     plt.show()
 
 

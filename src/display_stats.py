@@ -61,6 +61,7 @@ def display_stats(data, xlabel, ylabel, individual_cols=None, **kwargs):
     ax.legend()
 
     plt.tight_layout()
+    plt.savefig(f'{title}.png', dpi=300, bbox_inches='tight')
     plt.show()
         
     

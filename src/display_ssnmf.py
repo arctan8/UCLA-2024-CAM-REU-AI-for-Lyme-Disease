@@ -27,20 +27,31 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
             k = model.k
         except AttributeError:
             raise ValueError('This SSNMF version does not have an instance variable k, please specify k in kwargs.')
-        
-    display_heatmap(A, 'A', (1.5, 5), k, feature_name, feature_labels, defn,**kwargs)
-    
-    display_heatmap(B, 'B', (4, 1), k, f'Labels_{feature_name}', class_labels, defn, **kwargs)
     
     K = B @ A.T
-    display_heatmap(K.T, 'K', (1, 8),len(K), feature_name, feature_labels, defn, xlabel='Labels', **kwargs)
+    
+    scale = 1
+    
+    figsize_A = (scale * A.shape[1], 0.75*scale * A.shape[0])
+    figsize_B = (scale * B.shape[1], 0.75*scale * B.shape[0])
+    figsize_K = (scale * K.T.shape[1], 0.75*scale * K.T.shape[0])
+
+    display_heatmap(A, 'A', figsize_A, k, feature_name, feature_labels, defn, class_labels=class_labels)
+    display_heatmap(B, 'B', figsize_B, k, 'Labels', class_labels, defn, class_labels=class_labels)
+    display_heatmap(K.T, 'K', figsize_K, len(K), feature_name, feature_labels, defn, xlabel='Labels', **kwargs)
     
     
 def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, defn, **kwargs):
+    # fig, ax = plt.subplots(figsize=figsize, dpi=100, constrained_layout=True)
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
-    sns.heatmap(matrix, xticklabels=range(1,num_topics+1), yticklabels=feature_labels)
     
     xlabel = kwargs.get('xlabel','Topics')
+
+    xticklabels = kwargs.get('xticklabels', range(1,num_topics+1))
+    sns.heatmap(matrix, xticklabels=xticklabels, yticklabels=feature_labels)
+
+    if isinstance(xticklabels, list):
+        plt.xticks(rotation=45)
     
     ax.set_xlabel(xlabel)
     ax.set_ylabel(feature_name)
@@ -59,6 +70,7 @@ def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feat
     
     fig.savefig(f"{title}.png",bbox_inches='tight')
     plt.show()
+    plt.close(fig)
 
 
 def display_distr(distr, **kwargs):

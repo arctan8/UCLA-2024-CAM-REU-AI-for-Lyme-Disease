@@ -52,14 +52,18 @@ def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feat
 
     if isinstance(xticklabels, list):
         plt.xticks(rotation=45)
-    
+        
+    # if feature_name == 'Labels':
+    # plt.yticks(rotation=90) # for some strange reason the labels on matrix B are vertical
+        
     ax.set_xlabel(xlabel)
     ax.set_ylabel(feature_name)
     
     title = f"{defn}: Matrix {matrix_name}: {feature_name} x Topics"
     
     ax.set_title(title)
-
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    
     groupcounts = kwargs.get('groupcounts', None)
 
     if groupcounts is not None:

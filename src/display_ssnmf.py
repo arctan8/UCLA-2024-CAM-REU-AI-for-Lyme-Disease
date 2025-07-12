@@ -33,24 +33,28 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
     scale = 1
     
     figsize_A = (scale * A.shape[1], 0.75*scale * A.shape[0])
-    figsize_B = (scale * B.shape[1], 0.75*scale * B.shape[0])
+    figsize_B = (1.75* scale * B.shape[1], 1.75 * 0.75*scale * B.shape[0])
     figsize_K = (scale * K.T.shape[1], 0.75*scale * K.T.shape[0])
 
-    display_heatmap(A, 'A', figsize_A, k, feature_name, feature_labels, defn, class_labels=class_labels)
-    display_heatmap(B, 'B', figsize_B, k, 'Labels', class_labels, defn, class_labels=class_labels)
+    display_heatmap(A, 'A', figsize_A, k, feature_name, feature_labels, defn, **kwargs)
+    display_heatmap(B, 'B', figsize_B, k, 'Labels', class_labels, defn, **kwargs)
     display_heatmap(K.T, 'K', figsize_K, len(K), feature_name, feature_labels, defn, xlabel='Labels', **kwargs)
     
     
 def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, defn, **kwargs):
     # fig, ax = plt.subplots(figsize=figsize, dpi=100, constrained_layout=True)
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
-    
+
     xlabel = kwargs.get('xlabel','Topics')
 
-    xticklabels = kwargs.get('xticklabels', range(1,num_topics+1))
+    if matrix_name == 'A' or matrix_name == 'B':
+        xticklabels = tuple(range(1,num_topics+1))
+    else:
+        xticklabels = kwargs.get('xticklabels', tuple(range(1,num_topics+1)))
+                                 
     sns.heatmap(matrix, xticklabels=xticklabels, yticklabels=feature_labels)
 
-    if isinstance(xticklabels, list):
+    if matrix_name == 'K' and len(xticklabels) > 1:
         plt.xticks(rotation=45)
         
     # if feature_name == 'Labels':
@@ -62,13 +66,18 @@ def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feat
     title = f"{defn}: Matrix {matrix_name}: {feature_name} x Topics"
     
     ax.set_title(title)
-    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
     
+    if len(feature_labels) > 1:
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+
     groupcounts = kwargs.get('groupcounts', None)
 
     if groupcounts is not None:
         count_text = "\n".join([f"{k}: {v}" for k, v in groupcounts.items()])
-        ax.text(1.05, 1, count_text, transform=ax.transAxes,
+        # ax.text(1.05, 1, count_text, transform=ax.transAxes,
+        #         fontsize=10, verticalalignment='top',
+        #         bbox=dict(boxstyle="round", facecolor="white", edgecolor="gray"))
+        ax.text(1.20, 1, count_text, transform=ax.transAxes,
                 fontsize=10, verticalalignment='top',
                 bbox=dict(boxstyle="round", facecolor="white", edgecolor="gray"))
     

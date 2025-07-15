@@ -17,6 +17,8 @@ def display_stats(data, xlabel, ylabel, individual_cols=None, **kwargs):
     width (float, optional): width of bars. Default 0.25
     figsize (2-tuple, optional): size of figure
     '''
+
+    gps = kwargs.get('gps', None)
     variables = [col for col in data.df.columns if col not in {NEURO, MUSCULO, BOTH, NEITHER, NON_NEURO, NON_MUSCULO}]
 
     # Labels used, eg {Neuro, Non-Neuro}
@@ -27,7 +29,10 @@ def display_stats(data, xlabel, ylabel, individual_cols=None, **kwargs):
 
     variables.reverse() # Reverse variable list (for display purposes)
     # groups = {label: filtered dataframe with only rows with 1's in label}
-    groups = {col: data.df[data.df[col] == 1] for col in select_cols}
+    if gps == None:
+        groups = {col: data.df[data.df[col] == 1] for col in select_cols}
+    else:
+        groups = {col: data.df[data.df[col] == 1] for col in gps}
     
     for col, group in groups.items():
         print(f'{col} group: {len(group)}')

@@ -138,13 +138,28 @@ class Haddock_SSNMF(SSNMF_Application):
         # accuracy = accuracy_score(Y_labels, Y_hat_labels)
         if Y_labels.ndim == 1:
             Y_labels = np.column_stack((Y_labels, 1-Y_labels)) # Make Y_labels 2D
+        
         Y_labels = Y_labels.T
+        Y_hat = Y_hat.T        
+        y_len = len(Y_hat)
         
-        Y_hat_labels = np.round(Y_hat)
-        Y_hat_labels = Y_hat_labels.T        
-        y_len = len(Y_hat_labels)
+        assert Y_hat.shape == Y_labels.shape
         
-        assert Y_hat_labels.shape == Y_labels.shape
+        # If Y_labels has [1,1] or [0,0] then we are doing multiclass classification, eg NvM with implicit_both_neither
+        # Else, binary classification, eg NvN_LABELS, MvM_LABELS, NvMvBvN_LABELS
+        #     Instead of rounding, assign a 1 to whichever class has the highest value, and make the rest 0\
+        Y_hat_labels = None
+
+        num_labels = Y_labels.shape[1]
+        
+        if num_labels == 2 and (np.all(Y_labels == [1,1], axis=1).any() or np.all(Y_labels == [0,0], axis=1).any()):            
+            Y_hat_labels = np.round(Y_hat)
+        else:
+            result = np.zeros(Y_hat.shape)
+            max_indices = np.argmax(Y_hat, axis=1)
+            result[np.arange(y_len), max_indices] = 1
+            Y_hat_labels = result
+        
         # print(f'Y_hat_labels.shape: {Y_hat_labels.shape}')
         
         correct_pred = 0 # True positive + True negative

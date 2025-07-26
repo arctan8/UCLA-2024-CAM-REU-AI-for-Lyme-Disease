@@ -158,10 +158,47 @@ class SSNMF_Application(ABC):
             return torch.norm(model.L * (model.Y - model.B @ model.S), p='fro').item()
         else:
             return np.linalg.norm(np.multiply(model.L, model.Y - model.B @ model.S), ord='fro')
-        
-    def train(self,**kwargs):
+    
+    def train(self, **kwargs):
         '''
-        train() is a non-crossvalidated algorithm. For each combination of parameters,
+        Conduct SSNMF on X_train, Y_train to produce Fulldata training accuracy. 
+        Train SSNMF on the whole X_train, Y_train dataset and evaluate it on the X_train, Y_train dataset.
+        Use factors A and B from training, conduct SSNMF on X_test and Y_test to produce testing accuracy.
+        
+        Parameters:
+        param_vals (namedtuple): Param(k=, lambda_val=, random_state=)
+        N (int, optional): number of iterations to train SSNMF, default 1000
+        
+        Returns:
+        train_score (float): training accuracy score
+        param_vals (dict): dictionary, keys=param_name, vals=param_vals
+        Xreconerr (float): ||X-AS|| reconstruction error
+        Yreconerr (float): ||X-AS|| reconstruction error
+        test_score (float): testing accuracy score
+        '''
+        N = kwargs.get('N', 1000)
+        
+        if self.best_param_vals is None:
+            param_vals = kwargs.get('param_vals')
+            assert param_vals is not None, "If no best parameters are found, please provide them for training!"
+        else:
+            param_vals = self.best_param_vals
+        
+        full_model = self.ssnmf_app(X=self.X_train.T, Y=self.Y_train.T, W=self.W_train.T, k=param_vals['k'], lam=param_vals['lambda'], random_state=param_vals['random_state'], modelNum=3)
+    
+        full_model.mult(numiters=N)
+        # Here X_tst_err is the same as get_Xreconerr 
+        train_score, X_tst_err =  self.get_accuracy(full_model, self.X_train.T, self.Y_train.T, S=full_model.S, W=self.W_train.T) 
+        X_reconerr = X_tst_err
+        Y_reconerr = self.get_Yreconerr(full_model)
+    
+        test_score, _ = self.get_accuracy(full_model, self.X_test.T, self.Y_test.T, W=self.W_test.T)
+    
+        return Train_Results(train_score, param_vals, X_reconerr, Y_reconerr, test_score, self.experiment)
+        
+    def fulldatasearch(self,**kwargs):
+        '''
+        fulldatasearch() is a non-crossvalidated algorithm. For each combination of parameters,
         train on training set, test on testing set. Other than separation of data into training 
         and testing sets, no other separation of data (as with crossvalidation).
 
@@ -218,49 +255,70 @@ class SSNMF_Application(ABC):
         results = []
         
         if self.torch:
+            Xreconerr_dict = {i:[] for i in param_range['k']}
+            Yreconerr_dict = {i:[] for i in param_range['k']}
+            Xcvtst_dict = {i:[] for i in param_range['k']}
+            
             for param_set in param_keys_and_comb:
-                # pool.map returns a long list of tuples (accuracy_score, {param: vals}, X_reconerr, Y_reconerr, test_accuracy_score)
-                results.append(partial_func(param_set))                
+                r = partial_func(param_set)
+                results.append(r)
+                end = time.time()
+
+                avg_score = r.validation_score
+                
+                # Update best accuracy from crossvalidation if necessary
+                if avg_score > best_accuracy_overall:
+                    best_accuracy_overall = avg_score
+                    best_param_vals_overall = param_set
+                    
+                # Put reconnerrs into dictionary
+                Xreconerr_dict[param_set['k']].append(r.xreconerr)
+                Yreconerr_dict[param_set['k']].append(r.yreconerr)
+                Xcvtst_dict[param_set['k']].append(r.x_valreconerr)
+
+            Xreconerr_distr = pd.DataFrame(Xreconerr_dict)
+            Yreconerr_distr = pd.DataFrame(Yreconerr_dict)
+            X_cvtst_reconerr_distr = pd.DataFrame(Xcvtst_dict)
+            
         else:
             with Pool(num_cores) as pool:
                 # pool.map returns a long list of tuples (accuracy_score, {param: vals}, X_reconerr, Y_reconerr, test_accuracy_score)
                 results = pool.map(partial_func, param_keys_and_comb)    
                 
-        best_train_results = max(results, key=lambda x: x[0])
-        best_train_overall = best_train_results[0]
-        best_train_param_overall = best_train_results[1]
-
-
-        # Buggy for some unknown reason
-        # best_test_results = max(results, key=lambda x: x[4])
-        test_data_extracted = [(test_acc, params) for (_, params, _,_, test_acc) in results]
-        best_test_results = max(test_data_extracted, key=lambda x: x[0])
-        best_test_overall = best_test_results[0]
-        best_test_param_overall = best_test_results[1]
-
-        print('best train results: ', best_train_results)
-        print('best test results: ', best_test_results)
-        
-        if get_topic_accu_distr:
-            for k in param_range['k']:
-                train_accu = [r[0] for r in results if r[1]['k'] == k]
-                train_accu_distr[k] = pd.Series(train_accu)
-
-                test_accu = [r[4] for r in results if r[1]['k'] == k]
-                test_accu_distr[k] = pd.Series(test_accu)
-
-        if get_reconerr_distr:
-            for k in param_range['k']:
-                Xreconerr = [r[2] for r in results if r[1]['k'] == k]
-                Xreconerr_distr[k] = pd.Series(Xreconerr)
-
-                Yreconerr = [r[3] for r in results if r[1]['k'] == k]
-                Yreconerr_distr[k] = pd.Series(Yreconerr)
-        
+            best_train_results = max(results, key=lambda x: x[0])
+            best_train_overall = best_train_results[0]
+            best_train_param_overall = best_train_results[1]
+    
+    
+            # Buggy for some unknown reason
+            # best_test_results = max(results, key=lambda x: x[4])
+            test_data_extracted = [(test_acc, params) for (_, params, _,_, test_acc) in results]
+            best_test_results = max(test_data_extracted, key=lambda x: x[0])
+            best_test_overall = best_test_results[0]
+            best_test_param_overall = best_test_results[1]
+    
+            print('best train results: ', best_train_results)
+            print('best test results: ', best_test_results)
+            
+            if get_topic_accu_distr:
+                for k in param_range['k']:
+                    train_accu = [r[0] for r in results if r[1]['k'] == k]
+                    train_accu_distr[k] = pd.Series(train_accu)
+    
+                    test_accu = [r[4] for r in results if r[1]['k'] == k]
+                    test_accu_distr[k] = pd.Series(test_accu)
+    
+            if get_reconerr_distr:
+                for k in param_range['k']:
+                    Xreconerr = [r[2] for r in results if r[1]['k'] == k]
+                    Xreconerr_distr[k] = pd.Series(Xreconerr)
+    
+                    Yreconerr = [r[3] for r in results if r[1]['k'] == k]
+                    Yreconerr_distr[k] = pd.Series(Yreconerr)
+            
         self.fulldata_best_train_param_vals = best_train_param_overall
         self.fulldata_best_train_model = self.get_best_fulldata_model() # model trained on self.X, self.Y, w/ best train params
 
-        # TODO FIX
         train_results = {'best_train_accu': best_train_overall, 'best_train_param': best_train_param_overall, 'train_accu_distr': train_accu_distr}
 
         test_results = {'best_test_accu': best_test_overall, 'best_test_param': best_test_param_overall, 'test_accu_distr': test_accu_distr}
@@ -326,42 +384,64 @@ class SSNMF_Application(ABC):
 
         print(len(param_keys_and_comb))
         count = 0
-        if self.torch:            
+        
+        if self.torch:
+            Xreconerr_dict = {i:[] for i in param_range['k']}
+            Yreconerr_dict = {i:[] for i in param_range['k']}
+            Xcvtst_dict = {i:[] for i in param_range['k']}
+            
             for param_set in param_keys_and_comb:
                 start = time.time()
-                results.append(partial_func(param_set))
+                r = partial_func(param_set)
+                results.append(r)
                 end = time.time()
                 print(f'PER PARAM COMB: {end-start:.6f} seconds')
                 count += 1
                 print(f'COUNT: {count}')
+
+                avg_score = r.validation_score
+                
+                # Update best accuracy from crossvalidation if necessary
+                if avg_score > best_accuracy_overall:
+                    best_accuracy_overall = avg_score
+                    best_param_vals_overall = param_set
+                    
+                # Put reconnerrs into dictionary
+                Xreconerr_dict[param_set['k']].append(r.xreconerr)
+                Yreconerr_dict[param_set['k']].append(r.yreconerr)
+                Xcvtst_dict[param_set['k']].append(r.x_valreconerr)
+
+            Xreconerr_distr = pd.DataFrame(Xreconerr_dict)
+            Yreconerr_distr = pd.DataFrame(Yreconerr_dict)
+            X_cvtst_reconerr_distr = pd.DataFrame(Xcvtst_dict)
             
         else:
             with Pool(num_cores) as pool:
                 # pool.map returns a long list of tuples (accuracy_score, {param: vals})
-                results = pool.map(partial_func, param_keys_and_comb)    
-        best_result = max(results, key=lambda x: x[0])
-        
-        best_accuracy_overall = best_result[0]
-        best_param_vals_overall = best_result[1]
+                results = pool.map(partial_func, param_keys_and_comb)  
 
-        if get_topic_accu_distr:
+            best_result = max(results, key=lambda x: x[0])
+            
+            best_accuracy_overall = best_result[0]
+            best_param_vals_overall = best_result[1]
+    
             for k in param_range['k']:
                 accu = [r[0] for r in results if r[1]['k'] == k]
                 accu_distr[k] = pd.Series(accu)
-
-        if get_reconerr_distr:
+    
             for k in param_range['k']:
-                Xreconerr = [r[2] for r in results if r[1]['k'] == k]
-                Xreconerr_distr[k] = pd.Series(Xreconerr)
-
-                Yreconerr = [r[3] for r in results if r[1]['k'] == k]
-                Yreconerr_distr[k] = pd.Series(Yreconerr)
-
-                X_cvtst_reconerr = [r[4] for r in results if r[1]['k'] == k]
-                X_cvtst_reconerr_distr[k] = pd.Series(X_cvtst_reconerr)
+                    Xreconerr = [r[2] for r in results if r[1]['k'] == k]
+                    Xreconerr_distr[k] = pd.Series(Xreconerr)
+    
+                    Yreconerr = [r[3] for r in results if r[1]['k'] == k]
+                    Yreconerr_distr[k] = pd.Series(Yreconerr)
+    
+                    X_cvtst_reconerr = [r[4] for r in results if r[1]['k'] == k]
+                    X_cvtst_reconerr_distr[k] = pd.Series(X_cvtst_reconerr)
 
         self.best_param_vals = best_param_vals_overall
 
+        print('DONE GRIDSEARCH')
         return Gridsearch_Result(best_accuracy_overall, best_param_vals_overall, accu_distr, Xreconerr_distr, Yreconerr_distr, X_cvtst_reconerr_distr, experiment=self.experiment)
     
     @abstractmethod

@@ -68,7 +68,7 @@ class Haddock_SSNMF(SSNMF_Application):
             self.ssnmf_app = Torch_SSNMF
         else:
             self.ssnmf_app = Pypi_SSNMF
-
+        
         self.experiment = Experiment(self.X_train, self.Y_train, self.X_test, self.Y_test, self.W_train, self.W_test)
         
     def find_matrix_S(self, X, A, **kwargs):
@@ -103,19 +103,6 @@ class Haddock_SSNMF(SSNMF_Application):
         ### Decrease precision to avoid NNLS Non-convergence? Or reduce # of iterations
         
         for i in range(num_features):
-            # s_i = None
-            # if W is None:
-            #     nnls_result = lsq_linear(A, X[:,i], bounds=(0,np.inf), tol=tol)
-            #     s_i = nnls_result.x
-
-            # else:
-            #     W_i = W[:,i]
-            #     W_i_matrix = np.diag(W_i)
-            #     X_i = X[:,i]
-                
-            #     nnls_result = lsq_linear(W_i_matrix@A, W_i_matrix@X_i, bounds=(0, np.inf), tol=tol)
-            #     s_i = nnls_result.x
-            # S[:, i] = s_i
             W_i = None
             A_check = None
             X_check = None
@@ -182,10 +169,8 @@ class Haddock_SSNMF(SSNMF_Application):
             W = to_numpy(W)
         
         # S = kwargs.get('S', self.find_matrix_S(X_data, A, W=W))
-        start = time.time()
+        
         S = kwargs.get('S', self.find_matrix_S(X_data, A, W=W))
-        end = time.time()
-        print(f'FIND MATRIX S: {end-start:.6f} seconds')
         
         if S is not None:
             S = to_numpy(S)
@@ -219,6 +204,7 @@ class Haddock_SSNMF(SSNMF_Application):
         if num_labels == 2 and (np.any(np.all(Y_labels == 1, axis=1)) or np.any(np.all(Y_labels == 0, axis=1))):
             Y_hat_labels = np.round(Y_hat)
         else:
+            print('COMPARISON IN HADDOCK_SSNMF LINE 222')
             result = np.zeros(Y_hat.shape)
             max_indices = np.argmax(Y_hat, axis=1)
             result[np.arange(y_len), max_indices] = 1
@@ -228,10 +214,6 @@ class Haddock_SSNMF(SSNMF_Application):
         
         correct_pred = 0 # True positive + True negative
         
-        # for true_label, pred_label in zip(Y_labels, Y_hat_labels):
-        #     # print(f'true_label: {true_label}, pred_label: {pred_label}')
-        #     if (true_label == pred_label).all():
-        #         correct_pred += 1
         correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1))
         
         accuracy = correct_pred / y_len # (TP + TN)/(TP+TN+FP+FN)
@@ -278,13 +260,7 @@ class Haddock_SSNMF(SSNMF_Application):
             
             model.mult(numiters=N)
 
-            start = time.time()
-            
-            
             accuracy, X_tst_err = self.get_accuracy(model,X_val_cv,Y_val_cv, W=W_train_cv) 
-
-            end = time.time()
-            print(f'GET ACCURACY: {end-start:.6f} seconds')
             
             scores.append(accuracy)
             X_tst_errs.append(X_tst_err)
@@ -315,6 +291,7 @@ class Haddock_SSNMF(SSNMF_Application):
         accuracy (float): calculated by sklearn.accuracy_score
         X_tst_err (float): ||X_tst - A S_nnls ||
         '''
+        
         param_vals = kwargs.get('param_vals', self.best_param_vals)
         N = kwargs.get('N', 1000)
         
@@ -374,7 +351,7 @@ class Haddock_SSNMF(SSNMF_Application):
         
         Returns: None
         '''
-        N = kwargs.get('N', 1000) 
+        N = kwargs.get('N', 1000)
         param_vals = kwargs.get('fulldata_best_param_vals', self.fulldata_best_train_param_vals)
         
         model = self.ssnmf_app(X=self.X.T, Y=self.Y.T, W=self.W.T, k=param_vals['k'], lam=param_vals['lambda'], random_state=param_vals['random_state'], modelNum=3)

@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import torch
 import numpy as np
-from numpy import linalg as la
-
 
 import ssnmf_abstract_classes
 from ssnmf_abstract_classes import SSNMF
 
-class SSNMF_N:
+from tensor_utils import *
+
+class SSNMF_T:
     """
     Class for (S)NMF model.
 
@@ -25,32 +26,32 @@ class SSNMF_N:
     ...
     Parameters
     ----------
-    X        : array
+    X        : torch.Tensor
                Data matrix of size m x n.
     k        : int_
                Number of topics.
     modelNum : int_, optional
                Number indicating which of above models user intends to train (the default is 1).
-    A        : array, optional
+    A        : torch.Tensor, optional
                Initialization for left factor matrix of X of size m x k (the default is a matrix with
                uniform random entries).
-    S        : array, optional
+    S        : torch.Tensor, optional
                Initialization for right factor matrix of X of size k x n (the default is a matrix with
                uniform random entries).
-    Y        : array, optional
+    Y        : torch.Tensor, optional
                Label matrix of size p x n (default is None).
-    B        : array, optional
+    B        : torch.Tensor, optional
                Initialization for left factor matrix of Y of size p x k (the default is a matrix with
                uniform random entries if Y is not None, None otherwise).
     lam      : float_, optional
                Weight parameter for classification term in objective (the default is 1 if Y is not
                None, None otherwise).
-    W        : array, optional
+    W        : torch.Tensor, optional
                Missing data indicator matrix of same size as X (the defaults is matrix of all ones).
-    L        : array, optional
+    L        : torch.Tensor, optional
                Missing label indicator matrix of same size as Y (the default is matrix of all ones if
                Y is not None, None otherwise).
-    tol      : tolerance for termanating the model
+    tol      : tolerance for termanating the model.
 
     Methods
     -------
@@ -63,48 +64,42 @@ class SSNMF_N:
     """
 
     def __init__(self, X, k, **kwargs):
+        cuda = torch.device('cuda') if torch.cuda.is_available() else torch.device("cpu")
         self.X = X
-        self.k = k
-        rows = np.shape(X)[0]
-        cols = np.shape(X)[1]
+        rows = X.size(0)
+        cols = X.size(1)
         self.modelNum = kwargs.get('modelNum', 1)  # initialize model indicator
-        self.W = kwargs.get('W', np.ones((rows, cols)))  # initialize missing data indicator matrix
-        # Edit to control randomness #################
-        
-        if 'random_state' in kwargs:
-            seed = kwargs.get('random_state')
-            np.random.seed(seed)
-            
-        self.A = kwargs.get('A', np.random.rand(rows, k))  # initialize factor A
-        self.S = kwargs.get('S', np.random.rand(k, cols))  # initialize factor S
-        self.tol = kwargs.get('tol', 1e-4) # initialize factor tol
+        self.W = kwargs.get('W', torch.ones([rows, cols], dtype=torch.float, device=cuda))  # initialize missing data indicator matrix
+        self.A = kwargs.get('A', torch.rand(rows, k, dtype=torch.float, device=cuda))  # initialize factor A
+        self.S = kwargs.get('S', torch.rand(k, cols, dtype=torch.float, device=cuda))  # initialize factor S
+        self.tol = kwargs.get('tol', 1e-4)  # initialize factor tol
 
         # check dimensions of X, A, and S match
-        if rows != np.shape(self.A)[0]:
+        if rows != self.A.size(0):
             raise Exception('The row dimensions of X and A are not equal.')
-        if cols != np.shape(self.S)[1]:
+        if cols != self.S.size(1):
             raise Exception('The column dimensions of X and S are not equal.')
-        if np.shape(self.A)[1] != k:
+        if self.A.size(1) != k:
             raise Exception('The column dimension of A is not k.')
-        if np.shape(self.S)[0] != k:
+        if self.S.size(0) != k:
             raise Exception('The row dimension of S is not k.')
 
         # supervision initializations (optional)
         self.Y = kwargs.get('Y', None)
         if self.Y is not None:
             # check dimensions of X and Y match
-            if np.shape(self.Y)[1] != np.shape(self.X)[1]:
+            if self.Y.size(1) != self.X.size(1):
                 raise Exception('The column dimensions of X and Y are not equal.')
 
-            classes = np.shape(self.Y)[0]
-            self.B = kwargs.get('B', np.random.rand(classes, k))
+            classes = self.Y.size(0)
+            self.B = kwargs.get('B', torch.rand(classes, k, dtype=torch.float, device=cuda))
             self.lam = kwargs.get('lam', 1)
-            self.L = kwargs.get('L', np.ones((classes, cols)))  # initialize missing label indicator matrix
+            self.L = kwargs.get('L', torch.ones([classes, cols], dtype=torch.float, device=cuda))  # initialize missing label indicator matrix
 
             # check dimensions of Y, S, and B match
-            if np.shape(self.B)[0] != classes:
+            if self.B.size(0) != classes:
                 raise Exception('The row dimensions of Y and B are not equal.')
-            if np.shape(self.B)[1] != k:
+            if self.B.size(1) != k:
                 raise Exception('The column dimension of B is not k.')
         else:
             self.B = None
@@ -150,7 +145,7 @@ class SSNMF_N:
             # based on model number, use proper update functions for A,S,(B)
             if self.modelNum == 1:
                 self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
-                self.S = np.transpose(self.dictupdateFro(np.transpose(self.X), np.transpose(self.S), np.transpose(self.A), np.transpose(self.W), eps))
+                self.S = torch.t(self.dictupdateFro(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
 
                 previousErr = currentErr
                 currentErr = self.fronorm(self.X, self.A, self.S, self.W)
@@ -159,7 +154,7 @@ class SSNMF_N:
 
             if self.modelNum == 2:
                 self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
-                self.S = np.transpose(self.dictupdateIdiv(np.transpose(self.X), np.transpose(self.S), np.transpose(self.A), np.transpose(self.W), eps))
+                self.S = torch.t(self.dictupdateIdiv(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
 
                 previousErr = currentErr
                 currentErr = self.Idiv(self.X, self.A, self.S, self.W)
@@ -168,10 +163,9 @@ class SSNMF_N:
 
             if self.modelNum == 3:
                 self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
-                
                 self.B = self.dictupdateFro(self.Y, self.B, self.S, self.L, eps)
-                
                 self.S = self.repupdateFF(eps)
+
                 previousErr = currentErr
                 currentErr = self.fronorm(self.X, self.A, self.S, self.W)**2 + self.lam * (self.fronorm(self.Y, self.B, self.S, self.L)**2)
                 if i == 0:
@@ -207,7 +201,7 @@ class SSNMF_N:
                 if i == 0:
                     initialErr = currentErr
 
-            if i>0 and (previousErr - currentErr) / initialErr < self.tol:
+            if i > 0 and (previousErr - currentErr) / initialErr < self.tol:
                 break
 
             if saveerrs:
@@ -239,13 +233,22 @@ class SSNMF_N:
 
         if saveerrs:
             if self.modelNum == 1 or self.modelNum == 2:
-                errs =np.array(errs)
+                if torch.cuda.is_available():
+                    errs = torch.cuda.FloatTensor(errs)
+                else:
+                    errs = torch.FloatTensor(errs)
                 return [errs]
             else:
-                errs = np.array(errs)
-                reconerrs = np.array(reconerrs)
-                classerrs = np.array(classerrs)
-                classaccs = np.array(classaccs)
+                if torch.cuda.is_available():
+                    errs = torch.cuda.FloatTensor(errs)
+                    reconerrs = torch.cuda.FloatTensor(reconerrs)
+                    classerrs = torch.cuda.FloatTensor(classerrs)
+                    classaccs = torch.cuda.FloatTensor(classaccs)
+                else:
+                    errs = torch.FloatTensor(errs)
+                    reconerrs = torch.FloatTensor(reconerrs)
+                    classerrs = torch.FloatTensor(classerrs)
+                    classaccs = torch.FloatTensor(classaccs)
                 return [errs, reconerrs, classerrs, classaccs]
 
     # based on model number, return correct type of error array(s)
@@ -255,13 +258,13 @@ class SSNMF_N:
         multiplicitive update for D and R in ||Z - DR||_F^2
         Parameters
         ----------
-        Z   : array
+        Z   : torch.Tensor
               Data matrix.
-        D   : array
+        D   : torch.Tensor
               Left factor matrix of Z.
-        R   : array
+        R   : torch.Tensor
               Right factor matrix of Z.
-        M   : array
+        M   : torch.Tensor
               Missing data indicator matrix of same size as Z (the defaults is matrix of all ones).
         eps : float_, optional
             Epsilon value to prevent division by zero (default is 1e-10).
@@ -270,22 +273,22 @@ class SSNMF_N:
         updated D or the transpose of updated R
         '''
 
-        return  np.multiply(
-                np.divide(D, eps + np.multiply(M, D@R) @ np.transpose(R)), \
-                np.multiply(M, Z) @ np.transpose(R))
+        return torch.mul(
+               torch.div(D, eps + torch.mul(M, D@R) @ torch.t(R)),
+               torch.mul(M, Z) @ torch.t(R))
 
     def dictupdateIdiv(self, Z, D, R, M, eps):
         '''
         multiplicitive update for D and R in D(Z||DR)
         Parameters
         ----------
-        Z   : array
+        Z   : torch.Tensor
               Data matrix.
-        D   : array
+        D   : torch.Tensor
               Left factor matrix of Z.
-        R   : array
+        R   : torch.Tensor
               Right factor matrix of Z.
-        M   : array
+        M   : torch.Tensor
               Missing data indicator matrix of same size as Z (the defaults is matrix of all ones).
         eps : float_, optional
             Epsilon value to prevent division by zero (default is 1e-10).
@@ -293,41 +296,42 @@ class SSNMF_N:
         -------
         updated D or the transpose of updated R
         '''
-        return np.multiply(np.divide(D, eps + M @ np.transpose(R)), \
-                           np.multiply(np.divide(np.multiply(M, Z), eps + np.multiply(M, D @ R)), M) @ np.transpose(R))
+        return torch.mul(torch.div(D, eps + M @ torch.t(R)),
+                         torch.mul(torch.div(torch.mul(M, Z), eps + torch.mul(M, D @ R)), M) @ torch.t(R))
 
     def repupdateFF(self, eps):
     # update to use for S in model (3)
-        return np.multiply(
-            np.divide(self.S, eps + np.transpose(self.A) @ np.multiply(self.W, self.A @ self.S) + \
-                      self.lam * np.transpose(self.B) @ np.multiply(self.L, self.B @ self.S)),
-            np.transpose(self.A) @ np.multiply(self.W, self.X) + self.lam * np.transpose(self.B) @ np.multiply(self.L, self.Y)
-        )
+        return torch.mul(
+            torch.div(self.S, eps + torch.t(self.A) @ torch.mul(self.W, self.A @ self.S) +
+                      self.lam * torch.t(self.B) @ torch.mul(self.L, self.B @ self.S)),
+            torch.t(self.A) @ torch.mul(self.W, self.X) + self.lam * torch.t(self.B)
+            @ torch.mul(self.L, self.Y))
 
     def repupdateIF(self, eps, modelNum):
     # update to use for S in models (4) and (5)
         if modelNum == 4:
-            return np.multiply(
-                np.divide(self.S, eps + (2 * np.transpose(self.A) @ np.multiply(self.W, self.A @ self.S) +
-                                         self.lam * np.transpose(self.B) @ self.L)),
-                2 * np.transpose(self.A) @ np.multiply(self.W, self.X) + self.lam * np.transpose(self.B) @ \
-                np.multiply(np.divide(np.multiply(self.L, self.Y), eps + np.multiply(self.L, self.B @ self.S)), self.L)
+            return torch.mul(
+                torch.div(self.S, eps + (2 * torch.t(self.A) @ torch.mul(self.W, self.A @ self.S) +
+                                         self.lam * torch.t(self.B) @ self.L)
+                          ),
+                2 * torch.t(self.A) @ torch.mul(self.W, self.X) + self.lam * torch.t(self.B) @ \
+                torch.mul(torch.div(torch.mul(self.L, self.Y), eps + torch.mul(self.L, self.B @ self.S)), self.L)
             )
 
         if modelNum == 5:
-            return np.multiply(
-                np.divide(self.S, eps + np.transpose(self.A) @ self.W + \
-                                  2 * self.lam * np.transpose(self.B) @ np.multiply(self.L, self.B @ self.S)),
-                np.transpose(self.A) @  np.multiply(np.divide(np.multiply(self.W, self.X), eps + np.multiply(self.W, self.A @ self.S)), self.W) + \
-                2 * self.lam * np.transpose(self.B) @ np.multiply(self.L, self.Y)
+            return torch.mul(
+                torch.div(self.S, eps + torch.t(self.A) @ self.W + 2 * self.lam * torch.t(self.B) @ torch.mul(self.L, self.B @ self.S)
+                          ),
+                torch.t(self.A) @ torch.mul(torch.div(torch.mul(self.W, self.X), eps + torch.mul(self.W, self.A @ self.S)), self.W) + \
+                2 * self.lam * torch.t(self.B) @ torch.mul(self.L, self.Y)
             )
 
     def repupdateII(self, eps):
     # update to use for S in model (6)
-        return np.multiply(
-            np.divide(self.S, eps + np.transpose(self.A) @ self.W + self.lam * np.transpose(self.B) @ self.L),
-            np.transpose(self.A) @ np.multiply(np.divide(np.multiply(self.W, self.X), eps + np.multiply(self.W, self.A @ self.S)), self.W) + \
-            self.lam * np.transpose(self.B) @ np.multiply(np.divide(np.multiply(self.L, self.Y), eps + np.multiply(self.L, self.B @ self.S)), self.L)
+        return torch.mul(
+            torch.div(self.S, eps + torch.t(self.A) @ self.W + self.lam * torch.t(self.B) @ self.L),
+            torch.t(self.A) @ torch.mul(torch.div(torch.mul(self.W, self.X), eps + torch.mul(self.W, self.A @ self.S)), self.W) + \
+            self.lam * torch.t(self.B) @ torch.mul(torch.div(torch.mul(self.L, self.Y), eps + torch.mul(self.L, self.B @ self.S)), self.L)
         )
 
     def accuracy(self, **kwargs):
@@ -335,13 +339,12 @@ class SSNMF_N:
         Compute accuracy of supervised model.
         Parameters
         ----------
-        Y : array, optional
+        Y : torch.tensor, optional
             Label matrix (default is self.Y).
-        B : array, optional
+        B : torch.tensor, optional
             Left factor matrix of Y (default is self.B).
-        S : array, optional
+        S : torch.tensor, optional
             Right factor matrix of Y (default is self.S).
-        L :
         Returns
         -------
         acc : float_
@@ -355,14 +358,14 @@ class SSNMF_N:
         if Y is None:
             raise Exception('Label matrix Y not provided: model is not supervised.')
 
-        numdata = np.shape(Y)[1]
+        numdata = Y.size(1)
 
         # count number of data points which are correctly classified
         numacc = 0
         Yhat = B @ S
         for i in range(numdata):
-            true_max = np.argmax(Y[:, i])
-            approx_max = np.argmax(Yhat[:, i])
+            true_max = torch.argmax(Y[:, i])
+            approx_max = torch.argmax(Yhat[:, i])
 
             if true_max == approx_max:
                 numacc = numacc + 1
@@ -376,13 +379,13 @@ class SSNMF_N:
         Compute I-divergence between Z and DS.
         Parameters
         ----------
-        Z   : array
+        Z   : torch.tensor
               Data matrix.
-        D   : array
+        D   : torch.tensor
               Left factor matrix of Z.
-        S   : array
+        S   : torch.tensor
               Right factor matrix of Z.
-        M   : array
+        M   : torch.tensor
               Missing data indicator matrix of same size as Z (the defaults is matrix of all ones).
         eps : float_, optional
             Epsilon value to prevent division by zero (default is 1e-10).
@@ -396,13 +399,13 @@ class SSNMF_N:
         if Z is None:
             raise Exception('Matrix Z not provided.')
         if M is None:
-            M = np.ones(Z.shape, dtype = float)
+            M = torch.ones(Z.size(0),Z.size(1), dtype=torch.float, device = Z.device)
 
         # compute divergence
-        Zhat = np.multiply(M, D @ S)
-        div = np.multiply(np.multiply(M, Z), np.log(np.divide(np.multiply(M, Z) + eps, Zhat + eps))) \
-              - np.multiply(M, Z) + Zhat
-        Idiv = np.sum(np.sum(div))
+        Zhat = torch.mul(M, D @ S)
+        div = torch.mul(torch.mul(M, Z), torch.log(torch.div(torch.mul(M, Z) + eps, Zhat + eps))) \
+              - torch.mul(M, Z) + Zhat
+        Idiv = torch.sum(torch.sum(div))
         return Idiv
 
     def fronorm(self, Z, D, S, M, **kwargs):
@@ -410,13 +413,13 @@ class SSNMF_N:
         Compute Frobenius norm between Z and DS.
         Parameters
         ----------
-        Z   : array
+        Z   : torch.tensor
               Data matrix.
-        D   : array
+        D   : torch.tensor
               Left factor matrix of Z.
-        S   : array
+        S   : torch.tensor
               Right factor matrix of Z.
-        M   : array
+        M   : torch.tensor
               Missing data indicator matrix of same size as Z (the defaults is matrix of all ones).
         Returns
         -------
@@ -427,18 +430,14 @@ class SSNMF_N:
         if Z is None:
             raise Exception('Matrix Z not provided.')
         if M is None:
-            M = np.ones(Z.shape, dtype = float)
+            M = torch.ones(Z.size(0), Z.size(1), dtype=torch.float, device=Z.device)
 
         # compute norm
-        Zhat = np.multiply(M, D @ S)
-        fronorm = np.linalg.norm(np.multiply(M, Z) - Zhat, 'fro')
+        Zhat = torch.mul(M, D @ S)
+        fronorm = torch.norm(torch.mul(M, Z) - Zhat, p='fro')
         return fronorm
 
-
-
-
-
-class Pypi_SSNMF(SSNMF_N, SSNMF):
+class Torch_SSNMF(SSNMF_T, SSNMF):
     """
         Class for (S)NMF model.
         This class is inherited from class SSNMF_N. It can take only Numpy array when initializing the model.
@@ -500,8 +499,24 @@ class Pypi_SSNMF(SSNMF_N, SSNMF):
     def __init__(self, X, k, **kwargs):
         if type(X) == np.ndarray:
             assert np.all(X >= 0), "Data Matrix X cannot have negative values!"
-            SSNMF_N.__init__(self, X, k, **kwargs)
-            self.str = "numpy"  # protected attribute
+            assert torch.cuda.is_available(), "No GPU Processing!"
+            
+            X = to_tensor(X)
+            
+            # Convert everything to pytorch
+            new_kwargs = {}
+            
+            for keys, values in kwargs.items():
+                if isinstance(values, np.ndarray) or isinstance(values, torch.Tensor):
+                    new_kwargs[keys] = to_tensor(values)
+                else:
+                    new_kwargs[keys] = values
+            self.k = k
+            
+            SSNMF_T.__init__(self, X, k, **new_kwargs)
+            self.str = "torch"  # protected attribute
+        else:
+            raise Error("Pass in numpy arrays not torch Tensors!")
         
 
     def mult(self, **kwargs):
@@ -520,9 +535,7 @@ class Pypi_SSNMF(SSNMF_N, SSNMF):
         errs : Numpy array or PyTorch tensor, optional
             If saveerrs, returns array of ||X - AS||_F for each iteration (length numiters).
         '''
-
-        if self.str == "numpy":
-            return SSNMF_N.mult(self, **kwargs)
+        return SSNMF_T.mult(self, **kwargs)
         
 
     def accuracy(self, **kwargs):
@@ -543,9 +556,7 @@ class Pypi_SSNMF(SSNMF_N, SSNMF):
             Fraction of correctly classified data points (computed with Y, B, S).
         '''
 
-
-        if self.str == "numpy":
-            return SSNMF_N.accuracy(self, **kwargs)
+        return SSNMF_T.accuracy(self, **kwargs)
         
 
     def Idiv(self, Z, D, S, M, **kwargs):
@@ -568,8 +579,7 @@ class Pypi_SSNMF(SSNMF_N, SSNMF):
         Idiv : float_
             I-divergence between Z and DS.
         '''
-        if self.str == "numpy":
-            return SSNMF_N.Idiv(self, Z, D, S, M, **kwargs)
+        return SSNMF_T.Idiv(self, Z, D, S, M, **kwargs)
         
     def fronorm(self, Z, D, S, M, **kwargs):
         '''
@@ -589,9 +599,5 @@ class Pypi_SSNMF(SSNMF_N, SSNMF):
         fronorm : float_
             Frobenius norm between Z and DS.
         '''
-        if self.str == "numpy":
-            return SSNMF_N.fronorm(self, Z, D, S, M, **kwargs)
+        return SSNMF_T.fronorm(self, Z, D, S, M, **kwargs)
         
-
-
-

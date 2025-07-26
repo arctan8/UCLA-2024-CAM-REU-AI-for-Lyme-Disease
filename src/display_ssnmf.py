@@ -1,6 +1,8 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from tensor_utils import *
+
 def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwargs):
     '''
     Display K = AB^T, A, and B heatmaps.
@@ -29,6 +31,11 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
             raise ValueError('This SSNMF version does not have an instance variable k, please specify k in kwargs.')
     
     K = B @ A.T
+
+    # Convert K, A, B to numpy if necessary
+    A = to_numpy(A)
+    B = to_numpy(B)
+    K = to_numpy(K)
     
     scale = 1
     

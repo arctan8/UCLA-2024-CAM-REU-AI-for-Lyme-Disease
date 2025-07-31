@@ -139,97 +139,97 @@ class SSNMF_T:
                 classerrs = []
                 classaccs = []
 
-
-        for i in range(numiters):
-            # multiplicative updates for A, S, and possibly B
-            # based on model number, use proper update functions for A,S,(B)
-            if self.modelNum == 1:
-                self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
-                self.S = torch.t(self.dictupdateFro(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
-
-                previousErr = currentErr
-                currentErr = self.fronorm(self.X, self.A, self.S, self.W)
-                if i == 0:
-                    initialErr = currentErr
-
-            if self.modelNum == 2:
-                self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
-                self.S = torch.t(self.dictupdateIdiv(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
-
-                previousErr = currentErr
-                currentErr = self.Idiv(self.X, self.A, self.S, self.W)
-                if i == 0:
-                    initialErr = currentErr
-
-            if self.modelNum == 3:
-                self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
-                self.B = self.dictupdateFro(self.Y, self.B, self.S, self.L, eps)
-                self.S = self.repupdateFF(eps)
-
-                previousErr = currentErr
-                currentErr = self.fronorm(self.X, self.A, self.S, self.W)**2 + self.lam * (self.fronorm(self.Y, self.B, self.S, self.L)**2)
-                if i == 0:
-                    initialErr = currentErr
-
-            if self.modelNum == 4:
-                self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
-                self.B = self.dictupdateIdiv(self.Y, self.B, self.S, self.L, eps)
-                self.S = self.repupdateIF(eps, self.modelNum)
-
-                previousErr = currentErr
-                currentErr = self.fronorm(self.X, self.A, self.S, self.W)**2 + self.lam * self.Idiv(self.Y, self.B, self.S, self.L)
-                if i == 0:
-                    initialErr = currentErr
-
-            if self.modelNum == 5:
-                self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
-                self.B = self.dictupdateFro(self.Y, self.B, self.S, self.L, eps)
-                self.S = self.repupdateIF(eps, self.modelNum)
-
-                previousErr = currentErr
-                currentErr = self.Idiv(self.X, self.A, self.S, self.W) + self.lam * (self.fronorm(self.Y, self.B, self.S, self.L)**2)
-                if i == 0:
-                    initialErr = currentErr
-
-            if self.modelNum == 6:
-                self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
-                self.B = self.dictupdateIdiv(self.Y, self.B, self.S, self.L, eps)
-                self.S = self.repupdateII(eps)
-
-                previousErr = currentErr
-                currentErr = self.Idiv(self.X, self.A, self.S, self.W) + self.lam * self.Idiv(self.Y, self.B, self.S, self.L)
-                if i == 0:
-                    initialErr = currentErr
-
-            if i > 0 and (previousErr - currentErr) / initialErr < self.tol:
-                break
-
-            if saveerrs:
-            # based on model number, initialize correct type of error array(s)
+        with torch.no_grad():
+            for i in range(numiters):
+                # multiplicative updates for A, S, and possibly B
+                # based on model number, use proper update functions for A,S,(B)
                 if self.modelNum == 1:
-                    errs.append(self.fronorm(self.X, self.A, self.S, self.W))
+                    self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
+                    self.S = torch.t(self.dictupdateFro(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
+    
+                    previousErr = currentErr
+                    currentErr = self.fronorm(self.X, self.A, self.S, self.W)
+                    if i == 0:
+                        initialErr = currentErr
+    
                 if self.modelNum == 2:
-                    errs.append(self.Idiv(self.X, self.A, self.S, self.W))
+                    self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
+                    self.S = torch.t(self.dictupdateIdiv(torch.t(self.X), torch.t(self.S), torch.t(self.A), torch.t(self.W), eps))
+    
+                    previousErr = currentErr
+                    currentErr = self.Idiv(self.X, self.A, self.S, self.W)
+                    if i == 0:
+                        initialErr = currentErr
+    
                 if self.modelNum == 3:
-                    reconerrs.append(self.fronorm(self.X, self.A, self.S, self.W))
-                    classerrs.append(self.fronorm(self.Y, self.B, self.S, self.L))
-                    errs.append(reconerrs[i] ** 2 + self.lam * classerrs[i] ** 2)
-                    classaccs.append(self.accuracy())
+                    self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
+                    self.B = self.dictupdateFro(self.Y, self.B, self.S, self.L, eps)
+                    self.S = self.repupdateFF(eps)
+    
+                    previousErr = currentErr
+                    currentErr = self.fronorm(self.X, self.A, self.S, self.W)**2 + self.lam * (self.fronorm(self.Y, self.B, self.S, self.L)**2)
+                    if i == 0:
+                        initialErr = currentErr
+    
                 if self.modelNum == 4:
-                    reconerrs.append(self.fronorm(self.X, self.A, self.S, self.W))
-                    classerrs.append(self.Idiv(self.Y, self.B, self.S, self.L))
-                    errs.append(reconerrs[i] ** 2 + self.lam * classerrs[i])
-                    classaccs.append(self.accuracy())
+                    self.A = self.dictupdateFro(self.X, self.A, self.S, self.W, eps)
+                    self.B = self.dictupdateIdiv(self.Y, self.B, self.S, self.L, eps)
+                    self.S = self.repupdateIF(eps, self.modelNum)
+    
+                    previousErr = currentErr
+                    currentErr = self.fronorm(self.X, self.A, self.S, self.W)**2 + self.lam * self.Idiv(self.Y, self.B, self.S, self.L)
+                    if i == 0:
+                        initialErr = currentErr
+    
                 if self.modelNum == 5:
-                    reconerrs.append(self.Idiv(self.X, self.A, self.S, self.W))
-                    classerrs.append(self.fronorm(self.Y, self.B, self.S, self.L))
-                    errs.append(reconerrs[i] + self.lam * (classerrs[i] ** 2))  # save errors
-                    classaccs.append(self.accuracy())
+                    self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
+                    self.B = self.dictupdateFro(self.Y, self.B, self.S, self.L, eps)
+                    self.S = self.repupdateIF(eps, self.modelNum)
+    
+                    previousErr = currentErr
+                    currentErr = self.Idiv(self.X, self.A, self.S, self.W) + self.lam * (self.fronorm(self.Y, self.B, self.S, self.L)**2)
+                    if i == 0:
+                        initialErr = currentErr
+    
                 if self.modelNum == 6:
-                    reconerrs.append(self.Idiv(self.X, self.A, self.S, self.W))
-                    classerrs.append(self.Idiv(self.Y, self.B, self.S, self.L))
-                    errs.append(reconerrs[i] + self.lam * classerrs[i])  # save errors
-                    classaccs.append(self.accuracy())
+                    self.A = self.dictupdateIdiv(self.X, self.A, self.S, self.W, eps)
+                    self.B = self.dictupdateIdiv(self.Y, self.B, self.S, self.L, eps)
+                    self.S = self.repupdateII(eps)
+    
+                    previousErr = currentErr
+                    currentErr = self.Idiv(self.X, self.A, self.S, self.W) + self.lam * self.Idiv(self.Y, self.B, self.S, self.L)
+                    if i == 0:
+                        initialErr = currentErr
+    
+                if i > 0 and (previousErr - currentErr) / initialErr < self.tol:
+                    break
+    
+                if saveerrs:
+                # based on model number, initialize correct type of error array(s)
+                    if self.modelNum == 1:
+                        errs.append(self.fronorm(self.X, self.A, self.S, self.W))
+                    if self.modelNum == 2:
+                        errs.append(self.Idiv(self.X, self.A, self.S, self.W))
+                    if self.modelNum == 3:
+                        reconerrs.append(self.fronorm(self.X, self.A, self.S, self.W))
+                        classerrs.append(self.fronorm(self.Y, self.B, self.S, self.L))
+                        errs.append(reconerrs[i] ** 2 + self.lam * classerrs[i] ** 2)
+                        classaccs.append(self.accuracy())
+                    if self.modelNum == 4:
+                        reconerrs.append(self.fronorm(self.X, self.A, self.S, self.W))
+                        classerrs.append(self.Idiv(self.Y, self.B, self.S, self.L))
+                        errs.append(reconerrs[i] ** 2 + self.lam * classerrs[i])
+                        classaccs.append(self.accuracy())
+                    if self.modelNum == 5:
+                        reconerrs.append(self.Idiv(self.X, self.A, self.S, self.W))
+                        classerrs.append(self.fronorm(self.Y, self.B, self.S, self.L))
+                        errs.append(reconerrs[i] + self.lam * (classerrs[i] ** 2))  # save errors
+                        classaccs.append(self.accuracy())
+                    if self.modelNum == 6:
+                        reconerrs.append(self.Idiv(self.X, self.A, self.S, self.W))
+                        classerrs.append(self.Idiv(self.Y, self.B, self.S, self.L))
+                        errs.append(reconerrs[i] + self.lam * classerrs[i])  # save errors
+                        classaccs.append(self.accuracy())
 
         if saveerrs:
             if self.modelNum == 1 or self.modelNum == 2:

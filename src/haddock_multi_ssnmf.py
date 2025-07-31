@@ -495,6 +495,7 @@ def gridsearch(experiment, param_range, **kwargs):
         X_cvtst_reconerr_distr[k] = pd.Series(X_cvtst_reconerr)
 
     best_param_vals = best_param_vals_overall
+    print("Got accuracy!")
 
     return Gridsearch_Result(best_accuracy_overall, best_param_vals_overall, accu_distr, Xreconerr_distr, Yreconerr_distr, X_cvtst_reconerr_distr, experiment)
 

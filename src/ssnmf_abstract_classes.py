@@ -411,6 +411,9 @@ class SSNMF_Application(ABC):
                 Yreconerr_dict[param_set['k']].append(r.yreconerr)
                 Xcvtst_dict[param_set['k']].append(r.x_valreconerr)
 
+                torch.cuda.synchronize()
+
+
             Xreconerr_distr = pd.DataFrame(Xreconerr_dict)
             Yreconerr_distr = pd.DataFrame(Yreconerr_dict)
             X_cvtst_reconerr_distr = pd.DataFrame(Xcvtst_dict)

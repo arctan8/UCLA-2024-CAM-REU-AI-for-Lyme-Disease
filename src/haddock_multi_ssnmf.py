@@ -5,6 +5,7 @@ import pandas as pd
 import itertools
 
 from pypi_ssnmf import Pypi_SSNMF
+from ssnmf_utils import *
 
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from sklearn.model_selection import KFold
@@ -12,6 +13,7 @@ from sklearn.model_selection import KFold
 from scipy.optimize import lsq_linear
 from sklearn.metrics import accuracy_score
 from collections import namedtuple
+
 
 '''
 These functions implement multiprocessing for a list of SSNMF experiments, provided as a list of tuples (data, labels).
@@ -21,16 +23,6 @@ The main function is haddock_multi_ssnmf; it returns a namedtuple Haddock_Multi_
 
 # PARAM_RANGE = {'k': range(2,7),'lambda': list(np.linspace(0,1,10)), 'random_state': range(0,10)}
 PARAM_RANGE = {'k': [4],'lambda': [1], 'random_state': [0]}
-
-Experiment = namedtuple('Experiment', ['X_train', 'Y_train', 'X_test', 'Y_test', 'W_train', 'W_test'])
-Param = namedtuple('Param', ['k','lambda_val','random_state'])
-
-Crossvalidation_Result = namedtuple('Crossvalidation_Result', ['validation_score','param_vals','xreconerr','yreconerr','x_valreconerr'])
-Gridsearch_Result = namedtuple('Gridsearch_Result', ['best_accuracy_overall','best_param_vals_overall','accu_distr', 'Xreconerr_distr', 'Yreconerr_distr', 'X_val_reconerr_distr', 'experiment'])
-Train_Results = namedtuple('Train_Results',['train_score', 'param_vals','xtrain_reconerr','ytrain_reconerr','test_score', 'experiment'])
-Test_Results = namedtuple('Test_Results', ['param_vals','experiment', 'test_score','X_test_error','model'])
-
-Fulldatasearch_Results = namedtuple('Fulldatasearch_Results',['train_results','test_results','reconerr_results'])
 
 Haddock_Multi_SSNMF = namedtuple('Haddock_Multi_SSNMF', ['gridsearch_results','train_results','test_results'])
 
@@ -89,20 +81,32 @@ def find_matrix_S(X, A, **kwargs):
         ### Decrease precision to avoid NNLS Non-convergence? Or reduce # of iterations
         
         for i in range(num_features):
-            s_i = None
             if W is None:
-                nnls_result = lsq_linear(A, X[:,i], bounds=(0,np.inf), tol=tol)
-                s_i = nnls_result.x
-
+                A_check = A
+                X_check = X[:, i]
             else:
-                W_i = W[:,i]
+                W_i = W[:, i]
                 W_i_matrix = np.diag(W_i)
-                X_i = X[:,i]
+                A_check = W_i_matrix @ A
+                X_check = W_i_matrix @ X[:, i]
+
+            if np.isnan(A_check).any() or np.isinf(A_check).any():
+                print(f"NaN or Inf detected in weighted A matrix at feature {i}")
+            if np.isnan(X_check).any() or np.isinf(X_check).any():
+                print(f"NaN or Inf detected in weighted X vector at feature {i}")
+            if np.isnan(W_i).any() or np.isinf(W_i).any():
+                print(f"NaN or Inf detected in weight vector at feature {i}")
+
+            # clip very small weights to avoid zeros:
+            if W is not None:
+                W_i = np.clip(W_i, 1e-10, None)  # avoid zeros
+                W_i_matrix = np.diag(W_i)
+                A_check = W_i_matrix @ A
+                X_check = W_i_matrix @ X[:, i]
                 
-                nnls_result = lsq_linear(W_i_matrix@A, W_i_matrix@X_i, bounds=(0, np.inf), tol=tol)
-                s_i = nnls_result.x
+            nnls_result = lsq_linear(A_check, X_check, bounds=(0, np.inf), method='bvls', tol=tol)
+            s_i = nnls_result.x
             S[:, i] = s_i
-            
         return S
 
 def get_accuracy(model, X_data, Y_labels, **kwargs):
@@ -135,19 +139,27 @@ def get_accuracy(model, X_data, Y_labels, **kwargs):
     
         if Y_labels.ndim == 1:
             Y_labels = np.column_stack((Y_labels, 1-Y_labels)) # Make Y_labels 2D
+
         Y_labels = Y_labels.T
+        Y_hat = Y_hat.T        
+        y_len = len(Y_hat)
         
-        Y_hat_labels = np.round(Y_hat)
-        Y_hat_labels = Y_hat_labels.T        
-        y_len = len(Y_hat_labels)
+        Y_hat_labels = None
+
+        num_labels = Y_labels.shape[1]
         
+        if num_labels == 2 and (np.any(np.all(Y_labels == 1, axis=1)) or np.any(np.all(Y_labels == 0, axis=1))):
+            Y_hat_labels = np.round(Y_hat)
+        else:
+            result = np.zeros(Y_hat.shape)
+            max_indices = np.argmax(Y_hat, axis=1)
+            result[np.arange(y_len), max_indices] = 1
+            Y_hat_labels = result
         assert Y_hat_labels.shape == Y_labels.shape
-        
+            
         correct_pred = 0 # True positive + True negative
         
-        for true_label, pred_label in zip(Y_labels, Y_hat_labels):
-            if (true_label == pred_label).all():
-                correct_pred += 1
+        correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1))
         
         accuracy = correct_pred / y_len # (TP + TN)/(TP+TN+FP+FN)
         return accuracy, X_tst_err
@@ -483,6 +495,7 @@ def gridsearch(experiment, param_range, **kwargs):
         X_cvtst_reconerr_distr[k] = pd.Series(X_cvtst_reconerr)
 
     best_param_vals = best_param_vals_overall
+    print("Got accuracy!")
 
     return Gridsearch_Result(best_accuracy_overall, best_param_vals_overall, accu_distr, Xreconerr_distr, Yreconerr_distr, X_cvtst_reconerr_distr, experiment)
 

@@ -1,6 +1,9 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from tensor_utils import *
+from sklearn.preprocessing import normalize
+
 def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwargs):
     '''
     Display K = AB^T, A, and B heatmaps.
@@ -17,6 +20,8 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
     figsize_B (tuple, optional): size of matrix B
     figsize_K (tuple, optional): size of matrix K
     '''
+
+    normal = kwargs.get('normal', False)
     A = model.A
     B = model.B
     
@@ -29,6 +34,19 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
             raise ValueError('This SSNMF version does not have an instance variable k, please specify k in kwargs.')
     
     K = B @ A.T
+
+    # Convert K, A, B to numpy if necessary
+    A = to_numpy(A)
+    B = to_numpy(B)
+    K = to_numpy(K)
+
+    if normal == True:
+        A = normalize(A.T, norm='l1').T
+        print(np.sum(A, axis = 0))
+        B = normalize(B.T, norm='l1').T
+        print(np.sum(B, axis = 0))
+        K = normalize(K, norm='l1')
+        print(np.sum(K.T, axis = 0))
     
     scale = 1
     

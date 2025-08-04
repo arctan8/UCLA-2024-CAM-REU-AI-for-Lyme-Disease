@@ -10,6 +10,7 @@ import ssnmf_abstract_classes
 import pypi_ssnmf
 import numpy as np
 import torch
+
 import time
 import gc
 
@@ -246,7 +247,6 @@ class Haddock_SSNMF(SSNMF_Application):
         X_tst_errs = []
         
         for train_index, val_index in kf.split(self.X_train):
-            start = time.time()
             X_train_cv, X_val_cv = self.X_train[train_index, :].T, self.X_train[val_index, :].T
             Y_train_cv, Y_val_cv = self.Y_train[train_index, :].T, self.Y_train[val_index, :].T
             W_train_cv, W_val_cv = self.W_train[train_index, :].T, self.W_train[val_index, :].T
@@ -277,22 +277,11 @@ class Haddock_SSNMF(SSNMF_Application):
             torch.cuda.empty_cache()
             # gc.collect()
 
-            end = time.time()
-            print(f'Per fold: {end - start}')
-
-
 
         avg_score = np.mean(scores) # self.get_accuracy returns floats
         avg_X_reconerr = np.mean(X_errs)
         avg_Y_reconerr = np.mean(Y_errs)
         avg_X_tst_err =  np.mean(X_tst_errs)
-
-        
-        # print(f'param_vals={param_values}, reconerr={avg_reconerr}')
-        # print('HADDOCK SSNMF GPU ALLOCATION IN CROSS_VALIDATE')
-        # print(f"GPU allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
-        # print('MEMORY SUMMARY')
-        # print(torch.cuda.memory_summary(device=None, abbreviated=False))
 
         return Crossvalidation_Result(avg_score, param_values, avg_X_reconerr, avg_Y_reconerr, avg_X_tst_err)
         

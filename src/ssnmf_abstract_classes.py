@@ -289,17 +289,11 @@ class SSNMF_Application(ABC):
             best_train_overall = best_train_results[0]
             best_train_param_overall = best_train_results[1]
     
-    
-            # Buggy for some unknown reason
-            # best_test_results = max(results, key=lambda x: x[4])
             test_data_extracted = [(test_acc, params) for (_, params, _,_, test_acc) in results]
             best_test_results = max(test_data_extracted, key=lambda x: x[0])
             best_test_overall = best_test_results[0]
             best_test_param_overall = best_test_results[1]
     
-            print('best train results: ', best_train_results)
-            print('best test results: ', best_test_results)
-            
             if get_topic_accu_distr:
                 for k in param_range['k']:
                     train_accu = [r[0] for r in results if r[1]['k'] == k]
@@ -382,7 +376,6 @@ class SSNMF_Application(ABC):
         partial_func = partial(self.cross_validate, kf=kf, **kwargs)
         results = []
 
-        print(len(param_keys_and_comb))
         count = 0
         
         if self.torch:
@@ -391,13 +384,8 @@ class SSNMF_Application(ABC):
             Xcvtst_dict = {i:[] for i in param_range['k']}
             
             for param_set in param_keys_and_comb:
-                start = time.time()
                 r = partial_func(param_set)
                 results.append(r)
-                end = time.time()
-                print(f'PER PARAM COMB: {end-start:.6f} seconds')
-                count += 1
-                print(f'COUNT: {count}')
 
                 avg_score = r.validation_score
                 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import torch
+
 import numpy as np
+import torch
 
 import ssnmf_abstract_classes
 from ssnmf_abstract_classes import SSNMF
@@ -64,14 +65,21 @@ class SSNMF_T:
     """
 
     def __init__(self, X, k, **kwargs):
-        cuda = torch.device('cuda') if torch.cuda.is_available() else torch.device("cpu")
+        # Use the best GPU available
+
+        device_num = os.environ["CUDA_VISIBLE_DEVICES"]
+        self.device = f'cuda:{device_num}'
+        assert str(X.device) == self.device
+        
         self.X = X
         rows = X.size(0)
         cols = X.size(1)
+
+        
         self.modelNum = kwargs.get('modelNum', 1)  # initialize model indicator
-        self.W = kwargs.get('W', torch.ones([rows, cols], dtype=torch.float, device=cuda))  # initialize missing data indicator matrix
-        self.A = kwargs.get('A', torch.rand(rows, k, dtype=torch.float, device=cuda))  # initialize factor A
-        self.S = kwargs.get('S', torch.rand(k, cols, dtype=torch.float, device=cuda))  # initialize factor S
+        self.W = kwargs.get('W', torch.ones([rows, cols], dtype=torch.float, device=self.device))  # initialize missing data indicator matrix
+        self.A = kwargs.get('A', torch.rand(rows, k, dtype=torch.float, device=self.device))  # initialize factor A
+        self.S = kwargs.get('S', torch.rand(k, cols, dtype=torch.float, device=self.device))  # initialize factor S
         self.tol = kwargs.get('tol', 1e-4)  # initialize factor tol
 
         # check dimensions of X, A, and S match
@@ -92,9 +100,9 @@ class SSNMF_T:
                 raise Exception('The column dimensions of X and Y are not equal.')
 
             classes = self.Y.size(0)
-            self.B = kwargs.get('B', torch.rand(classes, k, dtype=torch.float, device=cuda))
+            self.B = kwargs.get('B', torch.rand(classes, k, dtype=torch.float, device=self.device))
             self.lam = kwargs.get('lam', 1)
-            self.L = kwargs.get('L', torch.ones([classes, cols], dtype=torch.float, device=cuda))  # initialize missing label indicator matrix
+            self.L = kwargs.get('L', torch.ones([classes, cols], dtype=torch.float, device=self.device))  # initialize missing label indicator matrix
 
             # check dimensions of Y, S, and B match
             if self.B.size(0) != classes:
@@ -272,7 +280,6 @@ class SSNMF_T:
         -------
         updated D or the transpose of updated R
         '''
-
         return torch.mul(
                torch.div(D, eps + torch.mul(M, D@R) @ torch.t(R)),
                torch.mul(M, Z) @ torch.t(R))
@@ -500,15 +507,18 @@ class Torch_SSNMF(SSNMF_T, SSNMF):
         if type(X) == np.ndarray:
             assert np.all(X >= 0), "Data Matrix X cannot have negative values!"
             assert torch.cuda.is_available(), "No GPU Processing!"
+
+            device_num = os.environ["CUDA_VISIBLE_DEVICES"]
+            self.device = f'cuda:{device_num}'
             
-            X = to_tensor(X)
-            
+            X = to_tensor(X, device=self.device)
+
             # Convert everything to pytorch
             new_kwargs = {}
             
             for keys, values in kwargs.items():
                 if isinstance(values, np.ndarray) or isinstance(values, torch.Tensor):
-                    new_kwargs[keys] = to_tensor(values)
+                    new_kwargs[keys] = to_tensor(values, device=self.device)
                 else:
                     new_kwargs[keys] = values
             self.k = k

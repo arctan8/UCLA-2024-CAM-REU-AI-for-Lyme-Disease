@@ -18,6 +18,7 @@ from collections import namedtuple
 tSNE_Result = namedtuple('tSNE_Result', ['perplexity', 'divergence', 'X_transf'])
 N_COMP = 2
 INIT = 'pca'
+
 def find_perplexity(X, start=5, stop=105, step=5, multipro=True, n_components=N_COMP, init=INIT, **kwargs):
     '''
     Finds best perplexity which results in lowest KL divergence for t-SNE.
@@ -58,11 +59,6 @@ def find_perplexity(X, start=5, stop=105, step=5, multipro=True, n_components=N_
             
     else:
         for i in perplexity:
-            # model = TSNE(n_components=2, init=init, perplexity=i)
-            # reduced = model.fit_transform(X)
-            # div = model.kl_divergence_
-            # divergence.append(div)
-
             tsne_result = compute_tsne(X, p=i, n_components=n_components, init=init)
             div = tsne_result.divergence
             divergence.append(div)

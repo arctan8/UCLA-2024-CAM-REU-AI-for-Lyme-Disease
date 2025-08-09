@@ -27,142 +27,142 @@ PARAM_RANGE = {'k': [4],'lambda': [1], 'random_state': [0]}
 Haddock_Multi_SSNMF = namedtuple('Haddock_Multi_SSNMF', ['gridsearch_results','train_results','test_results'])
 
 def get_Xreconerr(model):
-        '''
-        Given a trained model, compute reconstruction error ||X-AS||_F,
-        using frobenius norm.
+    '''
+    Given a trained model, compute reconstruction error ||X-AS||_F,
+    using frobenius norm.
 
-        Parameters:
-        model (Pypi_SSNMF): trained model
+    Parameters:
+    model (Pypi_SSNMF): trained model
 
-        Return:
-        reconerr (float): reconstruction error
-        '''
-        
-        return np.linalg.norm(np.multiply(model.W, model.X - model.A @ model.S), ord='fro')
+    Return:
+    reconerr (float): reconstruction error
+    '''
+    
+    return np.linalg.norm(np.multiply(model.W, model.X - model.A @ model.S), ord='fro')
 
 def get_Yreconerr(model):
-        '''
-        Given a trained model, compute reconstruction error ||Y-BS||_F,
-        using frobenius norm.
+    '''
+    Given a trained model, compute reconstruction error ||Y-BS||_F,
+    using frobenius norm.
 
-        Parameters:
-        model (Pypi_SSNMF): trained model
+    Parameters:
+    model (Pypi_SSNMF): trained model
 
-        Return:
-        reconerr (float): reconstruction error
-        '''
-        
-        return np.linalg.norm(np.multiply(model.L, model.Y - model.B @ model.S), ord='fro')
+    Return:
+    reconerr (float): reconstruction error
+    '''
+    
+    return np.linalg.norm(np.multiply(model.L, model.Y - model.B @ model.S), ord='fro')
 
 def find_matrix_S(X, A, **kwargs):
-        '''
-        Compute coefficient matrix S from data matrix X and basis matrix A using 
-        Nonnegative Least Squares: X approx. AS.
-        
-        Parameters:
-        X (np.array): data matrix, cases x features
-        A (np.array): basis matrix, cases x topics
-        W (np.array, optional): weight matrix, cases x features
-        
-        Returns:
-        S (np.array): coefficient matrix, topics x features
-        tol (float, optional): NNLS tolerance, default 1e-10
-        '''
-        if X.shape[0] != A.shape[0]:
-            raise Exception('Shape mismatch, X: ',X.shape,' A: ',A.shape)
-        
-        W = kwargs.get('W', np.ones(X.shape))
-        tol = kwargs.get('tol',1e-10)
-        
-        num_samples, num_features = X.shape
-        num_components = A.shape[1]
-        
-        S = np.zeros((num_components, num_features))
-        ### Decrease precision to avoid NNLS Non-convergence? Or reduce # of iterations
-        
-        for i in range(num_features):
-            if W is None:
-                A_check = A
-                X_check = X[:, i]
-            else:
-                W_i = W[:, i]
-                W_i_matrix = np.diag(W_i)
-                A_check = W_i_matrix @ A
-                X_check = W_i_matrix @ X[:, i]
+    '''
+    Compute coefficient matrix S from data matrix X and basis matrix A using 
+    Nonnegative Least Squares: X approx. AS.
+    
+    Parameters:
+    X (np.array): data matrix, cases x features
+    A (np.array): basis matrix, cases x topics
+    W (np.array, optional): weight matrix, cases x features
+    
+    Returns:
+    S (np.array): coefficient matrix, topics x features
+    tol (float, optional): NNLS tolerance, default 1e-10
+    '''
+    if X.shape[0] != A.shape[0]:
+        raise Exception('Shape mismatch, X: ',X.shape,' A: ',A.shape)
+    
+    W = kwargs.get('W', np.ones(X.shape))
+    tol = kwargs.get('tol',1e-10)
+    
+    num_samples, num_features = X.shape
+    num_components = A.shape[1]
+    
+    S = np.zeros((num_components, num_features))
+    ### Decrease precision to avoid NNLS Non-convergence? Or reduce # of iterations
+    
+    for i in range(num_features):
+        if W is None:
+            A_check = A
+            X_check = X[:, i]
+        else:
+            W_i = W[:, i]
+            W_i_matrix = np.diag(W_i)
+            A_check = W_i_matrix @ A
+            X_check = W_i_matrix @ X[:, i]
 
-            if np.isnan(A_check).any() or np.isinf(A_check).any():
-                print(f"NaN or Inf detected in weighted A matrix at feature {i}")
-            if np.isnan(X_check).any() or np.isinf(X_check).any():
-                print(f"NaN or Inf detected in weighted X vector at feature {i}")
-            if np.isnan(W_i).any() or np.isinf(W_i).any():
-                print(f"NaN or Inf detected in weight vector at feature {i}")
+        if np.isnan(A_check).any() or np.isinf(A_check).any():
+            print(f"NaN or Inf detected in weighted A matrix at feature {i}")
+        if np.isnan(X_check).any() or np.isinf(X_check).any():
+            print(f"NaN or Inf detected in weighted X vector at feature {i}")
+        if np.isnan(W_i).any() or np.isinf(W_i).any():
+            print(f"NaN or Inf detected in weight vector at feature {i}")
 
-            # clip very small weights to avoid zeros:
-            if W is not None:
-                W_i = np.clip(W_i, 1e-10, None)  # avoid zeros
-                W_i_matrix = np.diag(W_i)
-                A_check = W_i_matrix @ A
-                X_check = W_i_matrix @ X[:, i]
-                
-            nnls_result = lsq_linear(A_check, X_check, bounds=(0, np.inf), method='bvls', tol=tol)
-            s_i = nnls_result.x
-            S[:, i] = s_i
-        return S
+        # clip very small weights to avoid zeros:
+        if W is not None:
+            W_i = np.clip(W_i, 1e-10, None)  # avoid zeros
+            W_i_matrix = np.diag(W_i)
+            A_check = W_i_matrix @ A
+            X_check = W_i_matrix @ X[:, i]
+            
+        nnls_result = lsq_linear(A_check, X_check, bounds=(0, np.inf), method='bvls', tol=tol)
+        s_i = nnls_result.x
+        S[:, i] = s_i
+    return S
 
 def get_accuracy(model, X_data, Y_labels, **kwargs):
-        '''
-        Given a trained model and actual label matrix,
-        calculate accuracy by comparing the predicted labels to the 
-        actual labels.
-        
-        Parameters:
-        model (Pypi_SSNMF): trained model
-        X_data (np.array): data to predict labels
-        Y_labels (np.array): actual label matrix (rows=patients, col=label)
-        S (np.array, optional): coefficient matrix, specified for fulldata_validation or calculated via NNLS if unspecified.
-        A (np.array): matrix A
-        W (np.array, optional): weight matrix W
-        
-        Returns:
-        accuracy (float): accuracy score
-        X_tst_err (float): ||X - AS|| for S generated by NNLS
-        '''
-        A = kwargs.get('A', model.A)
-        B = model.B
-       
-        W = kwargs.get('W', np.ones(X_data.shape))
-        
-        S = kwargs.get('S', find_matrix_S(X_data, A, W=W))
-        X_tst_err = np.linalg.norm(X_data - A@S, ord='fro')
-        
-        Y_hat = B @ S
+    '''
+    Given a trained model and actual label matrix,
+    calculate accuracy by comparing the predicted labels to the 
+    actual labels.
     
-        if Y_labels.ndim == 1:
-            Y_labels = np.column_stack((Y_labels, 1-Y_labels)) # Make Y_labels 2D
+    Parameters:
+    model (Pypi_SSNMF): trained model
+    X_data (np.array): data to predict labels
+    Y_labels (np.array): actual label matrix (rows=patients, col=label)
+    S (np.array, optional): coefficient matrix, specified for fulldata_validation or calculated via NNLS if unspecified.
+    A (np.array): matrix A
+    W (np.array, optional): weight matrix W
+    
+    Returns:
+    accuracy (float): accuracy score
+    X_tst_err (float): ||X - AS|| for S generated by NNLS
+    '''
+    A = kwargs.get('A', model.A)
+    B = model.B
+   
+    W = kwargs.get('W', np.ones(X_data.shape))
+    
+    S = kwargs.get('S', find_matrix_S(X_data, A, W=W))
+    X_tst_err = np.linalg.norm(X_data - A@S, ord='fro')
+    
+    Y_hat = B @ S
 
-        Y_labels = Y_labels.T
-        Y_hat = Y_hat.T        
-        y_len = len(Y_hat)
-        
-        Y_hat_labels = None
+    if Y_labels.ndim == 1:
+        Y_labels = np.column_stack((Y_labels, 1-Y_labels)) # Make Y_labels 2D
 
-        num_labels = Y_labels.shape[1]
+    Y_labels = Y_labels.T
+    Y_hat = Y_hat.T        
+    y_len = len(Y_hat)
+    
+    Y_hat_labels = None
+
+    num_labels = Y_labels.shape[1]
+    
+    if num_labels == 2 and (np.any(np.all(Y_labels == 1, axis=1)) or np.any(np.all(Y_labels == 0, axis=1))):
+        Y_hat_labels = np.round(Y_hat)
+    else:
+        result = np.zeros(Y_hat.shape)
+        max_indices = np.argmax(Y_hat, axis=1)
+        result[np.arange(y_len), max_indices] = 1
+        Y_hat_labels = result
+    assert Y_hat_labels.shape == Y_labels.shape
         
-        if num_labels == 2 and (np.any(np.all(Y_labels == 1, axis=1)) or np.any(np.all(Y_labels == 0, axis=1))):
-            Y_hat_labels = np.round(Y_hat)
-        else:
-            result = np.zeros(Y_hat.shape)
-            max_indices = np.argmax(Y_hat, axis=1)
-            result[np.arange(y_len), max_indices] = 1
-            Y_hat_labels = result
-        assert Y_hat_labels.shape == Y_labels.shape
-            
-        correct_pred = 0 # True positive + True negative
-        
-        correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1))
-        
-        accuracy = correct_pred / y_len # (TP + TN)/(TP+TN+FP+FN)
-        return accuracy, X_tst_err
+    correct_pred = 0 # True positive + True negative
+    
+    correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1))
+    
+    accuracy = correct_pred / y_len # (TP + TN)/(TP+TN+FP+FN)
+    return accuracy, X_tst_err
     
 def cross_validate(param_vals, experiment, kf, **kwargs):
 
@@ -268,7 +268,7 @@ def train_test_split(X, Y, **kwargs):
     
     X_train, X_test, Y_train, Y_test, W_train, W_test = sk_train_test_split(X, Y, W, test_size=test_size, random_state=random_state)
 
-    return Experiment(X_train, Y_train, X_test, Y_test, W_train, W_test)
+    return Haddock_Experiment(X_train, Y_train, X_test, Y_test, W_train, W_test)
     
 def train(param_vals, experiment, **kwargs):
     '''
@@ -299,9 +299,7 @@ def train(param_vals, experiment, **kwargs):
     X_reconerr = X_tst_err
     Y_reconerr = get_Yreconerr(full_model)
 
-    test_score, _ = get_accuracy(full_model, X_test.T, Y_test.T, W=W_test.T)
-
-    return Train_Results(train_score, param_vals, X_reconerr, Y_reconerr, test_score, experiment)
+    return Train_Results(train_score, param_vals, X_reconerr, Y_reconerr, experiment)
     
     
 def get_model(param_vals, X, Y, **kwargs):
@@ -495,8 +493,6 @@ def gridsearch(experiment, param_range, **kwargs):
         X_cvtst_reconerr_distr[k] = pd.Series(X_cvtst_reconerr)
 
     best_param_vals = best_param_vals_overall
-    print("Got accuracy!")
-
     return Gridsearch_Result(best_accuracy_overall, best_param_vals_overall, accu_distr, Xreconerr_distr, Yreconerr_distr, X_cvtst_reconerr_distr, experiment)
 
 
@@ -527,7 +523,7 @@ def haddock_multi_ssnmf(experiments, **kwargs):
     param_range = kwargs.get('param_range', PARAM_RANGE)
     
     with Pool(num_cores) as pool:
-        splitted_data = pool.starmap(train_test_split, experiments) # splitted_data is list of namedtuples Experiment(X_train=, Y_train=, etc}
+        splitted_data = pool.starmap(train_test_split, experiments) # splitted_data is list of namedtuples Haddock_Experiment(X_train=, Y_train=, etc}
 
         data_and_params = [(split, param_range) for split in splitted_data]
         gridsearch_results = pool.starmap(gridsearch, data_and_params) # validation accuracy list of namedtuples Gridsearch_Results

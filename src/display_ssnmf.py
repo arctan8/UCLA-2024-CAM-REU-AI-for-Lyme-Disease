@@ -15,6 +15,7 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
     class_labels (list): list of class names
     k (int, optional): number of topics
     groupcounts (dict, optional): group count dictionary
+    trial (int, optional): trial number
     
     figsize_A (tuple, optional): size of matrix A
     figsize_B (tuple, optional): size of matrix B
@@ -43,7 +44,8 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
     if normal == True:
         A = normalize(A.T, norm='l1').T
         print(np.sum(A, axis = 0))
-        B = normalize(B.T, norm='l1').T
+        # B = normalize(B.T, norm='l1').T
+        B = normalize(B, norm='l1')
         print(np.sum(B, axis = 0))
         K = normalize(K, norm='l1')
         print(np.sum(K.T, axis = 0))
@@ -59,7 +61,25 @@ def display_ssnmf(model, feature_name, feature_labels, class_labels, defn, **kwa
     display_heatmap(K.T, 'K', figsize_K, len(K), feature_name, feature_labels, defn, xlabel='Labels', **kwargs)
     
     
-def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, defn, **kwargs):
+def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feature_labels, defn="", **kwargs):
+    '''
+    Displays and saves a heatmap. The y-axis name is given by feature_name, the y-axis ticks are given by feature_labels.
+    The x-axis name is given by xlabel, the x-axis ticks are given by xticklabels.
+
+    Params:
+    matrix (np.array): matrix array
+    matrix_name (str): name of matrix
+    figsize (tuple): figure size, length x width
+    num_topics (int): number of topics
+    feature_name (str): name of features, eg. SYMPTOMS
+    feature_labels (list): list of feature names, eg. SYMPTOMS_COLS
+    defn (str, optional): definition name, eg. DEF_CNSA
+    trial (int, optional): trial number
+    '''
+    
+    trial = kwargs.get('trial', -1)
+    normal = kwargs.get('normal', False)
+    
     # fig, ax = plt.subplots(figsize=figsize, dpi=100, constrained_layout=True)
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
 
@@ -80,8 +100,15 @@ def display_heatmap(matrix, matrix_name, figsize, num_topics, feature_name, feat
         
     ax.set_xlabel(xlabel)
     ax.set_ylabel(feature_name)
-    
-    title = f"{defn}: Matrix {matrix_name}: {feature_name} x Topics"
+
+    if trial == -1:
+        title = f"{defn}: Matrix {matrix_name}: {feature_name} x Topics"
+    else:
+        title = f"{defn}, Trial {trial}: Matrix {matrix_name}: {feature_name} x Topics"
+
+    # get normalized
+    if normal:
+        title += ", Normalized"
     
     ax.set_title(title)
     

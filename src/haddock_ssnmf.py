@@ -71,8 +71,7 @@ class Haddock_SSNMF(SSNMF_Application):
         else:
             self.ssnmf_app = Pypi_SSNMF
         
-        self.experiment = Experiment(self.X_train, self.Y_train, self.X_test, self.Y_test, self.W_train, self.W_test)
-        print("Concluded trial")
+        self.experiment = Haddock_Experiment(self.X_train, self.Y_train, self.X_test, self.Y_test, self.W_train, self.W_test)
         
     def find_matrix_S(self, X, A, **kwargs):
         '''
@@ -171,8 +170,6 @@ class Haddock_SSNMF(SSNMF_Application):
         if W is not None:
             W = to_numpy(W)
         
-        # S = kwargs.get('S', self.find_matrix_S(X_data, A, W=W))
-        
         S = kwargs.get('S', self.find_matrix_S(X_data, A, W=W))
         
         if S is not None:
@@ -182,11 +179,6 @@ class Haddock_SSNMF(SSNMF_Application):
         
         Y_hat = B @ S
         
-        # Assume that labels are mutually exclusive
-        # Y_hat_labels = (np.argmax(Y_hat, axis=0) == 0).astype(int)
-        # Y_labels = Y_labels[0] 
-            
-        # accuracy = accuracy_score(Y_labels, Y_hat_labels)
         if Y_labels.ndim == 1:
             Y_labels = np.column_stack((Y_labels, 1-Y_labels)) # Make Y_labels 2D
         
@@ -198,25 +190,21 @@ class Haddock_SSNMF(SSNMF_Application):
         
         # If Y_labels has [1,1] or [0,0] then we are doing multiclass classification, eg NvM with implicit_both_neither
         # Else, binary classification, eg NvN_LABELS, MvM_LABELS, NvMvBvN_LABELS
-        #     Instead of rounding, assign a 1 to whichever class has the highest value, and make the rest 0\
+        #     Instead of rounding, assign a 1 to whichever class has the highest value, and make the rest 0
         Y_hat_labels = None
 
         num_labels = Y_labels.shape[1]
         
-        # if num_labels == 2 and (np.all(Y_labels == [1,1], axis=1).any() or np.all(Y_labels == [0,0], axis=1).any()):
+        # If Y_labels has [1,1] or [0,0] ie. NvM with implicit_both_neither
         if num_labels == 2 and (np.any(np.all(Y_labels == 1, axis=1)) or np.any(np.all(Y_labels == 0, axis=1))):
             Y_hat_labels = np.round(Y_hat)
-        else:
+        else: # binary classification
             result = np.zeros(Y_hat.shape)
             max_indices = np.argmax(Y_hat, axis=1)
             result[np.arange(y_len), max_indices] = 1
             Y_hat_labels = result
         
-        # print(f'Y_hat_labels.shape: {Y_hat_labels.shape}')
-        
-        correct_pred = 0 # True positive + True negative
-        
-        correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1))
+        correct_pred = np.sum(np.all(Y_labels == Y_hat_labels, axis=1)) # True positive + True negative
         
         accuracy = correct_pred / y_len # (TP + TN)/(TP+TN+FP+FN)
         return accuracy, X_tst_err
@@ -232,6 +220,8 @@ class Haddock_SSNMF(SSNMF_Application):
         N (int, optional): number of iterations to train SSNMF, default 1000
         
         Returns:
+        Crossvalidation_Result (namedtuple), contains:
+
         avg_score (float): accuracy score, averaged over all folds
         param_values (dict): dictionary, keys=param_name, vals=param_vals
         avg_Xreconerr (float): ||X-AS|| reconstruction error, averaged over all folds
@@ -275,8 +265,6 @@ class Haddock_SSNMF(SSNMF_Application):
 
             del model
             torch.cuda.empty_cache()
-            # gc.collect()
-
 
         avg_score = np.mean(scores) # self.get_accuracy returns floats
         avg_X_reconerr = np.mean(X_errs)
@@ -284,6 +272,42 @@ class Haddock_SSNMF(SSNMF_Application):
         avg_X_tst_err =  np.mean(X_tst_errs)
 
         return Crossvalidation_Result(avg_score, param_values, avg_X_reconerr, avg_Y_reconerr, avg_X_tst_err)
+
+    def train(self, **kwargs):
+        '''
+        Conduct SSNMF on X_train, Y_train to produce training accuracy. 
+        Train SSNMF on the whole X_train, Y_train dataset and evaluate it on the X_train, Y_train dataset.
+        Use factors A and B from training, conduct SSNMF on X_test and Y_test to produce testing accuracy.
+        
+        Parameters:
+        param_vals (namedtuple): Param(k=, lambda_val=, random_state=)
+        N (int, optional): number of iterations to train SSNMF, default 1000
+        
+        Returns:
+        Train_Results (namedtuple), contains:
+        
+        train_score (float): training accuracy score
+        param_vals (dict): dictionary, keys=param_name, vals=param_vals
+        Xreconerr (float): ||X-AS|| reconstruction error
+        Yreconerr (float): ||X-AS|| reconstruction error
+        '''
+        N = kwargs.get('N', 1000)
+        
+        if self.best_param_vals is None:
+            param_vals = kwargs.get('param_vals')
+            assert param_vals is not None, "If no best parameters are found, please provide them for training!"
+        else:
+            param_vals = self.best_param_vals
+        
+        full_model = self.ssnmf_app(X=self.X_train.T, Y=self.Y_train.T, W=self.W_train.T, k=param_vals['k'], lam=param_vals['lambda'], random_state=param_vals['random_state'], modelNum=3)
+    
+        full_model.mult(numiters=N)
+        # Here X_tst_err is the same as get_Xreconerr 
+        train_score, X_tst_err =  self.get_accuracy(full_model, self.X_train.T, self.Y_train.T, S=full_model.S, W=self.W_train.T) 
+        X_reconerr = X_tst_err
+        Y_reconerr = self.get_Yreconerr(full_model)
+    
+        return Train_Results(train_score, param_vals, X_reconerr, Y_reconerr, self.experiment)
         
     def test(self, *args, **kwargs):
         '''
@@ -293,6 +317,8 @@ class Haddock_SSNMF(SSNMF_Application):
         param_vals (dict, optional): keys=param_names, values=param_vals
         
         Returns:
+        Test_Results (namedtuple), contains:
+        
         accuracy (float): calculated by sklearn.accuracy_score
         X_tst_err (float): ||X_tst - A S_nnls ||
         '''
@@ -324,6 +350,8 @@ class Haddock_SSNMF(SSNMF_Application):
         N (int, optional): number of iterations to train SSNMF, default 1000
         
         Returns:
+        Train_Results (namedtuple), contains
+        
         train_score (float): training accuracy score
         param_values (dict): dictionary, keys=param_name, vals=param_vals
         Xreconerr (float): ||X-AS|| reconstruction error

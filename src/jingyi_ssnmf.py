@@ -18,6 +18,9 @@ class Jingyi_SSNMF(SSNMF_Application):
         super().__init__(X,Y)
         
         self.train_test_split()
+
+    def fulldata_validate(self):
+        raise Error("Not Implemented!")
         
     def train(self, lam, model, N):
         '''
